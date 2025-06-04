@@ -1,5 +1,6 @@
 FROM python:3.13.3-slim as base
-RUN apt-get update && apt-get install -y
+RUN apt-get update && apt-get install -y curl ca-certificates && rm -rf /var/lib/apt/lists/*
+
 
 WORKDIR /app
 COPY aws.py .
@@ -7,8 +8,7 @@ COPY aws.py .
 # COPY obama1.jpg .
 
 
-RUN pip install --no-cache-dir boto3
-RUN pip install requests
+RUN pip install --no-cache-dir boto3 requests
 
 ENTRYPOINT ["python", "/app/aws.py"] 
 
