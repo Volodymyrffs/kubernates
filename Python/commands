@@ -1,0 +1,2 @@
+docker build -t recongition .
+docker run -v "%\directory:/app/directory" recongition
