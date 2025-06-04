@@ -72,39 +72,14 @@ deploy-job:
     - export KUBECONFIG=$(pwd)/kubeconfig.yaml
     - |
       if [ "$CI_COMMIT_REF_NAME" == "dev" ]; then
-         export DB_PORT="$DB_PORT_DEV"
-         export DB_HOST="$DB_HOST_DEV"
-         export DB_USER="$DB_USER_DEV"
-         export DB_PASS="$DB_PASS_DEV"
-         export KAFKA_BROKER="$KAFKA_BROKER_DEV"
-         export IDENTITY_SERVER_URL="$IDENTITY_SERVER_URL_DEV"
-         export LIST_URL="$LISTS_URL_DEV"
-         export TASK_URL="$TASK_URL_DEV"
-         export HR_GROUP_ID="$HR_GROUP_ID_DEV"
-         export ORGANIZATION_LIST_ID="$ORGANIZATION_LIST_ID_DEV"
-         export PROJECT_ID="$PROJECT_ID_DEV"
+         export #VAR_NAME_DEV ="$VAR_DEV"
          echo "Using DEV environment variables"
       elif [ "$CI_COMMIT_REF_NAME" == "master" ]; then
-         export DB_PORT="$DB_PORT_PROD"
-         export DB_HOST="$DB_HOST_PROD"
-         export DB_USER="$DB_USER_PROD"
-         export DB_PASS="$DB_PASS_PROD"
-         export KAFKA_BROKER="$KAFKA_BROKER_PROD"
-         export CREATE_TOPIC="$CREATE_TOPIC_PROD"
-         export IDENTITY_SERVER_URL="$IDENTITY_SERVER_URL_PROD"
-         export LIST_URL="$LISTS_URL_PROD"
-         export TASK_URL="$TASK_URL_PROD"
-         export HR_GROUP_ID="$HR_GROUP_ID_PROD"
-         export ORGANIZATION_LIST_ID="$ORGANIZATION_LIST_ID_PROD"
-         export PROJECT_ID="$PROJECT_ID_PROD"
+         export #VAR_NAME_PROD ="$VAR_PROD"
          echo "Using PROD environment variables"
       fi
 
       echo "REF $CI_COMMIT_REF_NAME"
-      echo "DB_PORT $DB_PORT"
-      echo "DB_HOST $DB_HOST"
-      echo "DB_USER $DB_USER"
-      echo "DB_PASS $DB_PASS"
       echo "Using $ENVIRONMENT"
     - export TAG_COMMIT_LOWERCASE=$(echo "$TAG_COMMIT" | tr '[:upper:]' '[:lower:]')
     - echo $TAG_COMMIT
