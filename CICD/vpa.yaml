@@ -1,1 +1,17 @@
-
+apiVersion: autoscaling.k8s.io/v1
+kind: VerticalPodAutoscaler
+metadata:
+  name: example-pva
+  namespace: example
+spec:
+  targetRef:
+    apiVersion: "apps/v1"
+    kind:       Deployment
+    name:       example-pod
+  updatePolicy:
+    updateMode: "Off"  # or Auto or Initial 
+  resourcePolicy:
+    containerPolicies:
+      - containerName: "*"
+        controlledResources: ["cpu", "memory"]
+        controlledValues: "RequestsAndLimits"
