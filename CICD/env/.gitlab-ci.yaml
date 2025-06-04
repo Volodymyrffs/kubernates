@@ -1,0 +1,127 @@
+stages:
+  - build
+  - deploy
+  - cleanup
+
+variables:
+  TAG_COMMIT: $CI_REGISTRY_IMAGE:$CI_COMMIT_SHA
+  TAG_LATEST: $CI_REGISTRY_IMAGE:latest
+
+
+  
+build-job-dev:
+  image: docker:latest  
+  stage: build 
+  before_script:
+    - unset DOCKER_HOST
+    - echo "Logging in to Docker registry..." 
+    - echo "$CI_JOB_TOKEN" | docker login -u gitlab-ci-token --password-stdin $CI_REGISTRY  # Логинимся в регистр
+    - apk update && apk add gettext
+  script: 
+    - echo "Building Docker image..."  
+    - |
+      if [ "$CI_COMMIT_REF_NAME" == "dev" ]; then
+        export ENVIRONMENT="Development"
+      elif [ "$CI_COMMIT_REF_NAME" == "master" ]; then
+        export ENVIRONMENT="Production"
+      else
+        export ENVIRONMENT="Development"  # По умолчанию
+      fi
+    - echo "Using $ENVIRONMENT"
+    - docker build -t $TAG_COMMIT -t $TAG_LATEST --no-cache .
+    - echo "Pushing Docker image..."
+    - docker push $TAG_COMMIT  # Пушим образ с коммитом
+    - docker push $TAG_LATEST  # Пушим образ с тегом latest
+
+
+
+deploy-job:
+  image: alpine:3.21
+  stage: deploy
+  script:
+    - apk update && apk add --no-cache curl gettext
+    - curl -LO https://storage.googleapis.com/kubernetes-release/release/$(curl -s https://storage.googleapis.com/kubernetes-release/release/stable.txt)/bin/linux/amd64/kubectl
+    - chmod +x ./kubectl
+    - mv ./kubectl /usr/local/bin/kubectl
+
+    # create kubeconfig.yaml 
+    - |
+      cat <<EOF > kubeconfig.yaml
+      apiVersion: v1
+      clusters:
+      - cluster:
+          server: $K3S_SERVER
+          certificate-authority-data: $K3S_CA
+        name: your-cluster
+      contexts:
+      - context:
+          cluster: your-cluster
+          user: your-user
+        name: your-context
+      current-context: your-context
+      kind: Config
+      preferences: {}
+      users:
+      - name: your-user
+        user:
+          client-certificate-data: $K3S_CLIENT_CERT
+          client-key-data: $K3S_CLIENT_KEY
+      EOF
+
+    # var KUBECONFIG
+    - export KUBECONFIG=$(pwd)/kubeconfig.yaml
+    - |
+      if [ "$CI_COMMIT_REF_NAME" == "dev" ]; then
+         export DB_PORT="$DB_PORT_DEV"
+         export DB_HOST="$DB_HOST_DEV"
+         export DB_USER="$DB_USER_DEV"
+         export DB_PASS="$DB_PASS_DEV"
+         export KAFKA_BROKER="$KAFKA_BROKER_DEV"
+         export IDENTITY_SERVER_URL="$IDENTITY_SERVER_URL_DEV"
+         export LIST_URL="$LISTS_URL_DEV"
+         export TASK_URL="$TASK_URL_DEV"
+         export HR_GROUP_ID="$HR_GROUP_ID_DEV"
+         export ORGANIZATION_LIST_ID="$ORGANIZATION_LIST_ID_DEV"
+         export PROJECT_ID="$PROJECT_ID_DEV"
+         echo "Using DEV environment variables"
+      elif [ "$CI_COMMIT_REF_NAME" == "master" ]; then
+         export DB_PORT="$DB_PORT_PROD"
+         export DB_HOST="$DB_HOST_PROD"
+         export DB_USER="$DB_USER_PROD"
+         export DB_PASS="$DB_PASS_PROD"
+         export KAFKA_BROKER="$KAFKA_BROKER_PROD"
+         export CREATE_TOPIC="$CREATE_TOPIC_PROD"
+         export IDENTITY_SERVER_URL="$IDENTITY_SERVER_URL_PROD"
+         export LIST_URL="$LISTS_URL_PROD"
+         export TASK_URL="$TASK_URL_PROD"
+         export HR_GROUP_ID="$HR_GROUP_ID_PROD"
+         export ORGANIZATION_LIST_ID="$ORGANIZATION_LIST_ID_PROD"
+         export PROJECT_ID="$PROJECT_ID_PROD"
+         echo "Using PROD environment variables"
+      fi
+
+      echo "REF $CI_COMMIT_REF_NAME"
+      echo "DB_PORT $DB_PORT"
+      echo "DB_HOST $DB_HOST"
+      echo "DB_USER $DB_USER"
+      echo "DB_PASS $DB_PASS"
+      echo "Using $ENVIRONMENT"
+    - export TAG_COMMIT_LOWERCASE=$(echo "$TAG_COMMIT" | tr '[:upper:]' '[:lower:]')
+    - echo $TAG_COMMIT
+    - echo $TAG_COMMIT_LOWERCASE
+  
+    # check kubectl
+    - kubectl get pods -n $CI_COMMIT_REF_NAME
+    - cat deployment.yaml | envsubst | kubectl apply -f -
+
+
+
+cleanup-job:
+  image: docker:latest
+  stage: cleanup
+  script:
+    - echo "Logging in to Docker registry..."
+    - echo "$CI_JOB_TOKEN" | docker login -u gitlab-ci-token --password-stdin $CI_REGISTRY
+    - echo "Cleaning up old Docker images and containers..."
+    - docker image prune -af --filter "until=24h"  # Чистим старые имейджи
+    - docker container prune -f  # Чистим неиспользуемые контейнеры
