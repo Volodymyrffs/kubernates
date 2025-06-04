@@ -13,4 +13,6 @@ This is a minimal and production-friendly example of how to containerize a Node.
 ### 1. Build the image
 
 ```bash
-docker build -t node-telegram-bot .
+docker build -t recognition .
+docker run -v "%cd%/directory:/app/directory" recognition #for CMD
+docker run -v "$(pwd)/directory:/app/directory" recognition #for Linux
