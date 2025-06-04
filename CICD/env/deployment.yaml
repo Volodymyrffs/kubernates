@@ -1,0 +1,47 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: #name-pod
+  namespace: $CI_COMMIT_REF_NAME
+  labels:
+    name: reporting-absence-$CI_COMMIT_REF_NAME
+  annotations:
+    kubernetes.io/change-cause: "Deployed commit $CI_COMMIT_SHA: $CI_COMMIT_MESSAGE"  
+spec:
+  revisionHistoryLimit: 4
+  replicas: 2  
+  selector:
+    matchLabels:
+      name: #name-pod-$CI_COMMIT_REF_NAME  
+  template:
+    metadata:
+      labels:
+        name: #name-pod-$CI_COMMIT_REF_NAME  
+    spec:
+      imagePullSecrets:
+      - name: kub-gitlab-key
+      containers:
+      - name: #name-pod-$CI_COMMIT_REF_NAME 
+        image: $TAG_COMMIT_LOWERCASE  
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 5005  
+        env:
+         - name: #variable name
+           value: "$variable"        
+      nodeSelector:
+        node-role.kubernetes.io/worker: worker
+---        
+apiVersion: v1
+kind: Service
+metadata:
+  name: #name-pod-$CI_COMMIT_REF_NAME
+  namespace: $CI_COMMIT_REF_NAME
+spec:
+  selector:
+    name: #name-pod-$CI_COMMIT_REF_NAME
+  ports:
+  - protocol: TCP
+    port: 5005
+    targetPort: 5005
+  type: ClusterIP        
