@@ -1,2 +1,3 @@
-docker build -t recongition .
-docker run -v "%\directory:/app/directory" recongition
+docker build -t recognition .
+docker run -v "%cd%/directory:/app/directory" recognition #for CMD
+docker run -v "$(pwd)/directory:/app/directory" recognition #for Linux
