@@ -16,3 +16,4 @@ Secure handling of environment variables
 
 Clean multi-stage builds (if applicable)
 
+                                                            Also conteins examlpe   best practic CI\CD  and Deployment services (use Variable with env or secrect in K8s) 
