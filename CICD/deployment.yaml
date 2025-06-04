@@ -1,1 +1,56 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: pod
+  namespace: $CI_COMMIT_REF_NAME
+  labels:
+    name: pod-$CI_COMMIT_REF_NAME
+  annotations:
+    kubernetes.io/change-cause: "Deployed commit $CI_COMMIT_SHA: $CI_COMMIT_MESSAGE"  
+spec:
+  replicas: 2  
+  revisionHistoryLimit: 5 
+  selector:
+    matchLabels:
+      name: pod-$CI_COMMIT_REF_NAME  
+  template:
+    metadata:
+      labels:
+        name: pod-$CI_COMMIT_REF_NAME  
+    spec:
+      imagePullSecrets:
+      - name: kub-gitlab-key
+      containers:
+      - name: pod-$CI_COMMIT_REF_NAME 
+        image: $TAG_COMMIT_LOWERCASE  
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 5012  
+        env:
+          - name: DOTNET_ENVIRONMENT
+            value: "$ENVIRONMENT"
+        volumeMounts:
+            - name: config-volume
+              mountPath: /app/appsettings.$ENVIRONMENT.json
+              subPath: appsettings.$ENVIRONMENT.json        
+      volumes:
+        - name: config-volume
+          secret:
+            secretName: pod-config  
+      nodeSelector:
+        node-role.kubernetes.io/worker: worker
+---        
+apiVersion: v1
+kind: Service
+metadata:
+  name: pod-$CI_COMMIT_REF_NAME
+  namespace: $CI_COMMIT_REF_NAME
+spec:
+  selector:
+    name: pod-$CI_COMMIT_REF_NAME
+  ports:
+  - protocol: TCP
+    port: 5012 
+    targetPort: 5012 
+  type: ClusterIP        
 
