@@ -1,1 +1,124 @@
 
+stages:
+  - build
+  - deploy
+  - cleanup
+
+variables:
+  TAG_COMMIT: $CI_REGISTRY_IMAGE:$CI_COMMIT_SHA
+  TAG_LATEST: $CI_REGISTRY_IMAGE:latest
+
+
+
+build-job-dev: 
+  image: docker:latest 
+  stage: build 
+  before_script:
+    - unset DOCKER_HOST
+    - export DOCKER_CONTENT_TRUST=0
+    - echo "Logging in to Docker registry..."
+    - echo "$CI_JOB_TOKEN" | docker login -u gitlab-ci-token --password-stdin $CI_REGISTRY  # Логинимся в регистр
+    - apk update && apk add gettext
+  script:
+    - echo "Building Docker image..."
+    - |
+      if [ "$CI_COMMIT_REF_NAME" == "dev" ]; then
+        export ENVIRONMENT="Development"
+      elif [ "$CI_COMMIT_REF_NAME" == "master" ]; then
+        export ENVIRONMENT="Production"
+      else
+        export ENVIRONMENT="Development"
+      fi
+    - echo "Using ASPNETCORE_ENVIRONMENT=$ENVIRONMENT"
+    - |
+     docker build -f %Path to dockerfile%/Dockerfile \
+      --force-rm \
+      -t $TAG_COMMIT \
+      -t $TAG_LATEST \
+      --build-arg "BUILD_CONFIGURATION=Release" \
+      --build-arg "ASPNETCORE_ENVIRONMENT=$ENVIRONMENT" \
+      --no-cache .
+    - echo "Pushing Docker image..."
+    - docker push $TAG_COMMIT  
+    - docker push $TAG_LATEST  
+
+
+
+
+deploy-job-dev:
+  image: alpine:3.21
+  stage: deploy
+  script:
+    - apk update && apk add --no-cache curl gettext
+    - curl -LO https://storage.googleapis.com/kubernetes-release/release/$(curl -s https://storage.googleapis.com/kubernetes-release/release/stable.txt)/bin/linux/amd64/kubectl
+    - chmod +x ./kubectl
+    - mv ./kubectl /usr/local/bin/kubectl
+
+    # create kubeconfig.yaml 
+    - |
+      cat <<EOF > kubeconfig.yaml
+      apiVersion: v1
+      clusters:
+      - cluster:
+          server: $K3S_SERVER
+          certificate-authority-data: $K3S_CA
+        name: your-cluster
+      contexts:
+      - context:
+          cluster: your-cluster
+          user: your-user
+        name: your-context
+      current-context: your-context
+      kind: Config
+      preferences: {}
+      users:
+      - name: your-user
+        user:
+          client-certificate-data: $K3S_CLIENT_CERT
+          client-key-data: $K3S_CLIENT_KEY
+      EOF
+
+    # var KUBECONFIG
+    - export KUBECONFIG=$(pwd)/kubeconfig.yaml
+    - echo $TAG_COMMIT
+    
+    - |
+      if [ "$CI_COMMIT_REF_NAME" == "dev" ]; then
+        export ENVIRONMENT="Development"
+      elif [ "$CI_COMMIT_REF_NAME" == "master" ]; then
+        export ENVIRONMENT="Production"
+      else
+        export ENVIRONMENT="Development"
+      fi
+      echo "Using ASPNETCORE_ENVIRONMENT=$ENVIRONMENT"
+
+    - export TAG_COMMIT_LOWERCASE=$(echo "$TAG_COMMIT" | tr '[:upper:]' '[:lower:]')
+    - echo $TAG_COMMIT
+    - echo $TAG_COMMIT_LOWERCASE
+   
+    - cat deployment.yaml | envsubst | kubectl apply -f -
+    - cat %Path to dockerfile%/appsettings.$ENVIRONMENT.json | envsubst > tmp-config.json
+    - |
+     if [ "$CI_COMMIT_REF_NAME" == "dev" ]; then  
+        kubectl delete secret pod-config --ignore-not-found -n dev
+        kubectl create secret generic pod-config \
+          --from-file=appsettings.Development.json=tmp-config.json \
+          -n dev
+      elif [ "$CI_COMMIT_REF_NAME" == "master" ]; then
+         kubectl delete secret pod-config --ignore-not-found -n master
+         kubectl create secret generic pod-config \
+          --from-file=appsettings.Production.json=tmp-config.json \
+          -n master
+      fi    
+
+
+cleanup-job:
+  image: docker:latest
+  stage: cleanup
+  script:
+    - echo "Logging in to Docker registry..."
+    - echo "$CI_JOB_TOKEN" | docker login -u gitlab-ci-token --password-stdin $CI_REGISTRY
+    - echo "Cleaning up old Docker images and containers..."
+    - docker image prune -af --filter "until=24h"  
+    - docker container prune -f 
+
